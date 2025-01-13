@@ -106,31 +106,46 @@ repeat with docxFile in docxFileList
 		set fileCount to fileCount + 1 -- Increment the count of successfully processed files
 		
 	on error errMsg
-		-- Convert the file path to a POSIX path
+		-- Convert the file path to POSIX
 		set posixDocxFile to POSIX path of docxFile
-		-- Prepare a sanitized error message using a temporary file
-		set tempErrorFile to POSIX path of (do shell script "mktemp")
+		
+		-- Extract the original filename
+		set fileFolder to do shell script "dirname " & quoted form of posixDocxFile
+		set fileName to do shell script "basename " & quoted form of posixDocxFile
+		
+		-- Sanitize the output filename
+		set sanitizedFileName to do shell script "echo " & quoted form of fileName & " | sed 's/[^a-zA-Z0-9._-]/_/g'"
+		set sanitizedFileName to sanitizedFileName's text 1 thru -6 & ".md" -- Change extension to .md
+		set sanitizedOutputPath to outputFolderPath & sanitizedFileName
 		
 		try
-			-- Write the error message to the temporary file
-			do shell script "echo " & quoted form of errMsg & " > " & quoted form of tempErrorFile
+			-- Retry processing with the original input file but sanitized output file name
+			set retryCommand to "/usr/local/bin/pandoc -t markdown_strict --extract-media=" & quoted form of mediaFolder & " " & quoted form of posixDocxFile & " -o " & quoted form of sanitizedOutputPath
+			do shell script retryCommand
 			
-			-- Log the problematic file and the error message into the log file
-			do shell script "echo \"Error with file: " & quoted form of posixDocxFile & "\" >> " & quoted form of errorLogFile
-			do shell script "cat " & quoted form of tempErrorFile & " >> " & quoted form of errorLogFile
-			
-			-- Clean up the temporary error file
-			do shell script "rm -f " & quoted form of tempErrorFile
-		on error logError
-			-- Handle unexpected issues while writing the log
-			display dialog "Failed to log the error. Additional error: " & logError buttons {"OK"} default button "OK"
+			-- Increment the file count if the retry succeeds
+			set fileCount to fileCount + 1
+		on error retryErrMsg
+			-- Log the original filename and sanitized output filename if retry fails
+			set errorLogFile to outputFolderPath & "error_log.txt"
+			set logFileHandle to open for access POSIX file errorLogFile with write permission
+			try
+				write "Original file: " & posixDocxFile & linefeed to logFileHandle as «class utf8»
+				write "Sanitized output file: " & sanitizedOutputPath & linefeed to logFileHandle as «class utf8»
+				write "Error message: " & retryErrMsg & linefeed to logFileHandle as «class utf8»
+			on error logError
+				display dialog "Failed to log the error. Additional error: " & logError buttons {"OK"} default button "OK"
+			end try
+			close access logFileHandle
 		end try
 		
 		-- Skip this file and continue with the next
 		try
-			close access POSIX file outputMarkdownFile
+			close access POSIX file sanitizedOutputPath
 		end try
 	end try
+	
+	
 end repeat
 
 
