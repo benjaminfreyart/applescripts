@@ -16,7 +16,7 @@ Since Hypercard, I've had fun tinkering with what one can do, but I started to g
   
 ---
 
-**Docx format to Markdown (Obsidian) conversion**
+**Docx format to Markdown (Obsidian) conversion**: [code](/docx%20to%20md%20batch%20conversion%20AppleScript)
 Secondly, I'm starting to tinker with obsidian, and wanted to convert some docs stored on google drive to markdown. After tinkering with Pandoc, and finding Panconvert slow, I started a script to make converting batches of files ... it works, and I've tested on various sets of files and nested folders. 
 
       **Mode d'emploi**:   
