@@ -1,7 +1,6 @@
-(*
-This script requires Pandoc to be installed on your system.
-You can install it via Homebrew: `brew install pandoc`
-*)
+(* This script requires Pandoc to be installed on your system. 
+You can install it via Homebrew: `brew install pandoc` *)
+
 -- Function to extract filename before extension, if an extension exists
 on extractFileName(filePath)
 	-- Convert the alias to a POSIX path
@@ -89,8 +88,8 @@ repeat with docxFile in docxFileList
 	do shell script "/usr/local/bin/pandoc -t markdown_strict --extract-media=" & quoted form of mediaFolder & " " & quoted form of docxFile & " -o " & quoted form of outputMarkdownFile
 	
 	try
-		-- Read the .md file as a text block
-		set fileContents to do shell script "cat " & quoted form of outputMarkdownFile
+		-- Read the .md file as a text block and escape single quotes
+		set fileContents to do shell script "cat " & quoted form of outputMarkdownFile & " | sed \"s/'/'\\\\''/g\""
 		-- Initialize updated contents variable
 		set updatedContents to ""
 		set tid to AppleScript's text item delimiters
@@ -101,9 +100,11 @@ repeat with docxFile in docxFileList
 		-- Use the sed command to update paths in the Markdown file
 		set updatedContents to do shell script "echo " & quoted form of fileContents & " | " & sedCommand
 		
-		
 		-- Write the updated contents back to the .md file
-		do shell script "echo " & quoted form of updatedContents & " > " & quoted form of outputMarkdownFile
+		set outputFileHandle to open for access POSIX file outputMarkdownFile with write permission
+		set eof outputFileHandle to 0 -- Clear the file
+		write updatedContents to outputFileHandle as «class utf8» -- Ensure UTF-8 encoding
+		close access outputFileHandle
 		set fileCount to fileCount + 1
 	on error errMsg
 		try
@@ -111,11 +112,7 @@ repeat with docxFile in docxFileList
 		end try
 		display dialog "Error: " & errMsg
 	end try
-	
-	
-	
 end repeat
-
 
 -- Display a summary of the operation
 display dialog "" & fileCount & " file(s) converted." buttons {"OK"} default button "OK"
