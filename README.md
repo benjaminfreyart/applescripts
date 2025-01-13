@@ -32,7 +32,7 @@ However, since this is a batch script that pulls images from within docx files a
 Pandoc generates this:
 **<img src="Users/{username}/{some folder}/{some subfolder}/attachments/{md filename}/media/image{#}"** I followed the lead of a few pandoc tutorials to create separate media folders for each document, but because of how Pandoc handles media, I haven't found a way to have pandoc generate relative links directly, so I relativize the link in a separate step. I like to keep the media all in the attachments folder, and Pandoc places it in subfolders by filename, which I have chosen not to alter.
 
-Therefore, this conversion script generates html stle <img> tags with the following structure:
+Therefore, this conversion script generates html style <img> tags with the following structure:
 **<img src="attachments/{markdown filename}/media/image{#}"**, and retains the style elements for sizing.  
 More on Pandoc mdeia file locations and link notation [here](https://github.com/jgm/pandoc/issues/1986)
 
