@@ -69,35 +69,32 @@ end if
 -- Initialize a counter for the number of files converted
 set fileCount to 0
 
+-- Define a log file for recording errors
+set errorLogFile to (outputFolderPath & "error_log.txt")
+do shell script "echo '' > " & quoted form of errorLogFile -- Clear or create the log file
+
 -- Loop through each .docx file and convert it using pandoc
 repeat with docxFile in docxFileList
-	-- Get the relative path of the .docx file using a shell command
-	set relativePath to do shell script "cd " & quoted form of inputFolderPath & "; python3 -c 'import os, sys; print(os.path.relpath(\"" & docxFile & "\", \"" & inputFolderPath & "\"))'"
-	set sourceFileName to extractFileName(docxFile)
-	-- Determine the output folder for the current .docx file
-	set outputFileFolder to (outputFolderPath & (do shell script "dirname " & quoted form of relativePath))
-	set outputMarkdownFile to (outputFolderPath & relativePath's text 1 thru -6 & ".md") -- Change extension to .md
-	set mediaFolder to (outputFolderPath & "attachments/" & relativePath's text 1 thru -6)
-	set relativeMediaFolder to ("attachments/" & relativePath's text 1 thru -6)
-	set escapedRelativeMediaFolder to do shell script "echo " & quoted form of relativeMediaFolder & " | sed 's|/|\\\\/|g'"
-	
-	-- Create the equivalent output subfolder if it doesn't exist
-	do shell script "mkdir -p " & quoted form of outputFileFolder
-	
-	-- Convert the .docx file to .md
-	do shell script "/usr/local/bin/pandoc -t markdown_strict --extract-media=" & quoted form of mediaFolder & " " & quoted form of docxFile & " -o " & quoted form of outputMarkdownFile
-	
 	try
-		-- Read the .md file as a text block and escape single quotes
+		-- Get the relative path of the .docx file using a shell command
+		set relativePath to do shell script "cd " & quoted form of inputFolderPath & "; python3 -c 'import os, sys; print(os.path.relpath(\"" & docxFile & "\", \"" & inputFolderPath & "\"))'"
+		set sourceFileName to extractFileName(docxFile)
+		-- Determine the output folder for the current .docx file
+		set outputFileFolder to (outputFolderPath & (do shell script "dirname " & quoted form of relativePath))
+		set outputMarkdownFile to (outputFolderPath & relativePath's text 1 thru -6 & ".md") -- Change extension to .md
+		set mediaFolder to (outputFolderPath & "attachments/" & relativePath's text 1 thru -6)
+		set relativeMediaFolder to ("attachments/" & relativePath's text 1 thru -6)
+		set escapedRelativeMediaFolder to do shell script "echo " & quoted form of relativeMediaFolder & " | sed 's|/|\\\\/|g'"
+		
+		-- Create the equivalent output subfolder if it doesn't exist
+		do shell script "mkdir -p " & quoted form of outputFileFolder
+		
+		-- Convert the .docx file to .md
+		do shell script "/usr/local/bin/pandoc -t markdown_strict --extract-media=" & quoted form of mediaFolder & " " & quoted form of docxFile & " -o " & quoted form of outputMarkdownFile
+		
+		-- Post-process the Markdown file to adjust media paths
 		set fileContents to do shell script "cat " & quoted form of outputMarkdownFile & " | sed \"s/'/'\\\\''/g\""
-		-- Initialize updated contents variable
-		set updatedContents to ""
-		set tid to AppleScript's text item delimiters
-		
-		-- Construct the dynamic sed command using escapedRelativeMediaFolder
 		set sedCommand to "sed 's|src=\"[^\"]*" & escapedRelativeMediaFolder & "|src=\"" & escapedRelativeMediaFolder & "|g'"
-		
-		-- Use the sed command to update paths in the Markdown file
 		set updatedContents to do shell script "echo " & quoted form of fileContents & " | " & sedCommand
 		
 		-- Write the updated contents back to the .md file
@@ -105,14 +102,37 @@ repeat with docxFile in docxFileList
 		set eof outputFileHandle to 0 -- Clear the file
 		write updatedContents to outputFileHandle as «class utf8» -- Ensure UTF-8 encoding
 		close access outputFileHandle
-		set fileCount to fileCount + 1
+		
+		set fileCount to fileCount + 1 -- Increment the count of successfully processed files
+		
 	on error errMsg
+		-- Convert the file path to a POSIX path
+		set posixDocxFile to POSIX path of docxFile
+		-- Prepare a sanitized error message using a temporary file
+		set tempErrorFile to POSIX path of (do shell script "mktemp")
+		
+		try
+			-- Write the error message to the temporary file
+			do shell script "echo " & quoted form of errMsg & " > " & quoted form of tempErrorFile
+			
+			-- Log the problematic file and the error message into the log file
+			do shell script "echo \"Error with file: " & quoted form of posixDocxFile & "\" >> " & quoted form of errorLogFile
+			do shell script "cat " & quoted form of tempErrorFile & " >> " & quoted form of errorLogFile
+			
+			-- Clean up the temporary error file
+			do shell script "rm -f " & quoted form of tempErrorFile
+		on error logError
+			-- Handle unexpected issues while writing the log
+			display dialog "Failed to log the error. Additional error: " & logError buttons {"OK"} default button "OK"
+		end try
+		
+		-- Skip this file and continue with the next
 		try
 			close access POSIX file outputMarkdownFile
 		end try
-		display dialog "Error: " & errMsg
 	end try
 end repeat
+
 
 -- Display a summary of the operation
 display dialog "" & fileCount & " file(s) converted." buttons {"OK"} default button "OK"
