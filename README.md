@@ -33,6 +33,7 @@ Pandoc generates this:
 **<img src="Users/{username}/{some folder}/{some subfolder}/attachments/{md filename}/media/image{#}"** I followed the lead of a few pandoc tutorials to create separate media folders for each document, but because of how Pandoc handles media, I haven't found a way to have pandoc generate relative links directly, so I relativize the link in a separate step. I like to keep the media all in the attachments folder, and Pandoc places it in subfolders by filename, which I have chosen not to alter.
 
 Therefore, this conversion script generates html stle <img> tags with the following structure:
-**<img src="attachments/{markdown filename}/media/image{#}"**, and retains the style elements for sizing. 
+**<img src="attachments/{markdown filename}/media/image{#}"**, and retains the style elements for sizing.  
+More on Pandoc mdeia file locations and link notation [here](https://github.com/jgm/pandoc/issues/1986)
 
 I have succesfully tested **converting these html format links to Obsidian ![[Image]] style links**, but the problem of adapting all possible size style notations made the code messy, and since most md viewers handle html links just fine, I really didn't feel like putting those adaptations into this version. 
