@@ -1,0 +1,121 @@
+(*
+This script requires Pandoc to be installed on your system.
+You can install it via Homebrew: `brew install pandoc`
+*)
+-- Function to extract filename before extension, if an extension exists
+on extractFileName(filePath)
+	-- Convert the alias to a POSIX path
+	set posixPath to POSIX path of filePath
+	
+	-- Extract the full filename from the path
+	set fullName to do shell script "basename " & quoted form of posixPath
+	
+	-- Decode the filename to revert any URL encoding
+	set decodedName to do shell script "python3 -c 'import urllib.parse; print(urllib.parse.unquote(\"" & fullName & "\"))'"
+	
+	-- Check if the filename contains "."
+	if decodedName contains "." then
+		-- Extract everything before the last "."
+		set nameBeforeExtension to do shell script "echo " & quoted form of decodedName & " | sed 's/\\.[^\\.]*$//'"
+		return nameBeforeExtension
+	else
+		-- No extension; return the full name as is
+		return decodedName
+	end if
+end extractFileName
+
+-- Ask the user to select a folder containing .docx files
+try
+	set inputFolderPath to POSIX path of (choose folder with prompt "Select a folder containing .docx files:")
+on error
+	display dialog "No folder was selected. Operation cancelled." buttons {"OK"} default button "OK"
+	return
+end try
+
+-- Ask the user to select a folder for output .md files
+try
+	set outputFolderPath to POSIX path of (choose folder with prompt "Select a folder to save the converted .md files:")
+on error
+	display dialog "No folder was selected. Operation cancelled." buttons {"OK"} default button "OK"
+	return
+end try
+
+-- Ask the user if they want to include nested subfolders
+display dialog "Do you want to process only the selected folder or include all nested subfolders?" buttons {"Only Selected Folder", "Include Subfolders"} default button "Include Subfolders"
+set includeSubfolders to button returned of result
+
+-- Determine the find command based on user choice
+if includeSubfolders is "Only Selected Folder" then
+	set docxFiles to do shell script "find " & quoted form of inputFolderPath & " -maxdepth 1 -name '*.docx'"
+else
+	set docxFiles to do shell script "find " & quoted form of inputFolderPath & " -name '*.docx'"
+end if
+
+-- Check if any .docx files were found
+if docxFiles = "" then
+	display dialog "No .docx files found in the selected folder." buttons {"OK"} default button "OK"
+	return
+end if
+
+-- Split the results into a list of files
+set docxFileList to paragraphs of docxFiles
+
+-- Verify if pandoc is installed
+set pandocInstalled to (do shell script "command -v /usr/local/bin/pandoc")
+if pandocInstalled = "" then
+	display dialog "Pandoc is not installed or not found at /usr/local/bin/pandoc. Please install Pandoc and try again." buttons {"OK"} default button "OK"
+	return
+end if
+
+-- Initialize a counter for the number of files converted
+set fileCount to 0
+
+-- Loop through each .docx file and convert it using pandoc
+repeat with docxFile in docxFileList
+	-- Get the relative path of the .docx file using a shell command
+	set relativePath to do shell script "cd " & quoted form of inputFolderPath & "; python3 -c 'import os, sys; print(os.path.relpath(\"" & docxFile & "\", \"" & inputFolderPath & "\"))'"
+	set sourceFileName to extractFileName(docxFile)
+	-- Determine the output folder for the current .docx file
+	set outputFileFolder to (outputFolderPath & (do shell script "dirname " & quoted form of relativePath))
+	set outputMarkdownFile to (outputFolderPath & relativePath's text 1 thru -6 & ".md") -- Change extension to .md
+	set mediaFolder to (outputFolderPath & "attachments/" & relativePath's text 1 thru -6)
+	set relativeMediaFolder to ("attachments/" & relativePath's text 1 thru -6)
+	set escapedRelativeMediaFolder to do shell script "echo " & quoted form of relativeMediaFolder & " | sed 's|/|\\\\/|g'"
+	
+	-- Create the equivalent output subfolder if it doesn't exist
+	do shell script "mkdir -p " & quoted form of outputFileFolder
+	
+	-- Convert the .docx file to .md
+	do shell script "/usr/local/bin/pandoc -t markdown_strict --extract-media=" & quoted form of mediaFolder & " " & quoted form of docxFile & " -o " & quoted form of outputMarkdownFile
+	
+	try
+		-- Read the .md file as a text block
+		set fileContents to do shell script "cat " & quoted form of outputMarkdownFile
+		-- Initialize updated contents variable
+		set updatedContents to ""
+		set tid to AppleScript's text item delimiters
+		
+		-- Construct the dynamic sed command using escapedRelativeMediaFolder
+		set sedCommand to "sed 's|src=\"[^\"]*" & escapedRelativeMediaFolder & "|src=\"" & escapedRelativeMediaFolder & "|g'"
+		
+		-- Use the sed command to update paths in the Markdown file
+		set updatedContents to do shell script "echo " & quoted form of fileContents & " | " & sedCommand
+		
+		
+		-- Write the updated contents back to the .md file
+		do shell script "echo " & quoted form of updatedContents & " > " & quoted form of outputMarkdownFile
+		set fileCount to fileCount + 1
+	on error errMsg
+		try
+			close access POSIX file outputMarkdownFile
+		end try
+		display dialog "Error: " & errMsg
+	end try
+	
+	
+	
+end repeat
+
+
+-- Display a summary of the operation
+display dialog "" & fileCount & " file(s) converted." buttons {"OK"} default button "OK"
